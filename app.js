@@ -5,20 +5,22 @@ const { App, ExpressReceiver } = require('@slack/bolt');
 
 const PORT = process.env.PORT || 10000;
 
+// Check Slack env vars
 const hasSlackConfig =
   !!process.env.SLACK_SIGNING_SECRET &&
   !!process.env.SLACK_BOT_TOKEN;
 
 if (!hasSlackConfig) {
-  // 🔒 SAFE MODE: just an Express server so Render stays green
+  // 🔒 SAFE MODE (no Slack credentials set)
   const app = express();
-
   app.use(express.json());
 
+  // Health check
   app.get('/health', (req, res) => {
     res.send('ok (Slack not configured yet)');
   });
 
+  // Slack events still need a 200 response to avoid timeouts
   app.post('/slack/events', (req, res) => {
     console.warn('Received /slack/events but Slack env vars are missing');
     res.status(200).send('Slack app not configured yet');
@@ -36,11 +38,12 @@ if (!hasSlackConfig) {
     endpoints: '/slack/events'
   });
 
-  // Health check
+  // Add health check to the Express receiver
   receiver.app.get('/health', (req, res) => {
     res.send('ok');
   });
 
+  // Create the Slack Bolt app
   const slackApp = new App({
     token: process.env.SLACK_BOT_TOKEN,
     receiver
@@ -89,7 +92,6 @@ if (!hasSlackConfig) {
   slackApp.event('team_join', async ({ event, client }) => {
     try {
       const userId = event.user.id;
-
       await client.chat.postMessage({
         channel: userId,
         text: `🎉 Welcome to the team, <@${userId}>!`
@@ -99,6 +101,7 @@ if (!hasSlackConfig) {
     }
   });
 
+  // Start the Slack app
   (async () => {
     await slackApp.start(PORT);
     console.log(`Slack app running on port ${PORT}`);
